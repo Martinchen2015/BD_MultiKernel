@@ -1,0 +1,87 @@
+function [ sol ] = xsolve_pdNCG( Y, A, lambda, mu, varargin )
+%XSOLVE_PDNCG   Solves for x for BD via steps over the phi manifold.
+%   [ sol ] = xsolve_pdNCG( Y, A, pen )   solves for X and
+%   returns the solution and objective as X_new and f_new respectively,
+%   given the observation Y and kernel A.
+%
+%   [ sol ] = xsolve_pdNCG( Y, A, pen, init )   solves for X
+%   given the primal and dual initializations init.X and init.Y.
+%
+%   [ sol ] = xsolve_pdNCG( Y, A, pen, init, INVTOL, INVIT )
+%   solves for X given tolerance INVTOL and maximum iteration INVIT for the
+%   PCG solver.
+
+    addpath('./helpers');
+    m = size(Y); %k = size(A);
+    vec = @(X) X(:);
+    objfun = @(X) norm(cconvfft2(A, reshape(X, m)) - Y, 'fro')^2/2 + ...
+                lambda.*sum(sqrt(mu^2 + vec(X).^2) - mu);
+    
+    EPSILON = 1e-6;     % Tolerance to stop the x-solver.
+    PCGTOL = 1e-6;
+    PCGIT = 2e2;
+    ALPHATOL = 1e-10;
+    C2 = 5e-2;
+    C3 = 2e-1;
+    
+    nvararg = numel(varargin);
+    if nvararg > 3
+        error('Too many input arguments.');
+    end
+    
+    X = zeros(m); Y = zeros(m);
+    if nvararg >= 1 && ~isempty(varargin{1})
+        if isfield(varargin{1}, 'X') && ~isempty(varargin{1}.X)
+            X = init.X;
+        end
+        if isfield(varargin{1}, 'Y') && ~isempty(varargin{1}.Y)
+            Y = init.Y;
+        end
+    end
+    f = objfun(X);
+    
+    if nvararg >= 2 && ~isempty(varargin{2})
+        PCGTOL = INVTOL;
+    end
+    
+    if nvararg >= 3 && ~isempty(varargin{3})
+        PCGIT = INVIT;
+    end
+
+    doagain = true;
+    while doagain 
+        g = cconvfft2(A, cconvfft2(A, X) - Y, [], 'left') + lambda * vec(X)./sqrt(mu^2 + x.^2);
+        Hdiag = lambda*D.*(1 - D.*vec(X).*vec(Y));
+        Hfun = @(v) Hdiag + cconvfft2(a, cconvfft2(a, reshape(d, m)), [], 'left');
+        PCGPRECOND = @(v) d./(Hdiag + 1);
+        
+        [xDelta,~] = pcg(Hfun, -g, PCGTOL, PCGIT, PCGPRECOND);
+        xDelta = reshape(xDelta, m);
+
+        % Update the dualvariable:
+        yDelta = D.*(1 - D.*vec(X).*vec(Y)).*d - (vec(Y) - D.*x);
+        Y = Y + reshape(yDelta, m);
+        Y = min(abs(Y), 1).*sign(Y);
+        
+        % Update the primal variable:
+        alpha = 1/C3;
+        while f_new > f - C2*alpha*norm(xDelta,'fro')^2 && ~alphatoolow
+            alpha = C3*alpha;
+            X_new = X + alpha*xDelta;
+            f_new = objfun(X_new);
+            alphatoolow = alpha < ALPHATOL;
+        end
+        
+        if ~alphatoolow
+            X = X_new;
+            f = f_new;
+        end
+        
+        doagain = norm(xDelta,'fro') > EPSILON && ~alphatoolow;
+    end
+    
+    sol.X = X;
+    sol.Y = Y;
+    sol.f = f;
+end
+
