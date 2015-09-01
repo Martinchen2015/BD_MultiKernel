@@ -1,1 +1,0 @@
-function xsolve_mk_pdNCG
