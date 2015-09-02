@@ -67,6 +67,56 @@ function [sol] = xsolver_mk_pdNCG(Y, A, lambda, mu, varargin)
     end
     
     %% Iterate
+    doagain = true; it = 0;
+    while doagain
+        it = it + 1;
+        
+        % gradients and hessians
+        tmp = zeros(m);
+        for i = 1:N
+            tmp = tmp + cconvfft2(A(:,:,i),X(:,:,i));
+        end
+        %gx = zeros(prod(m)*N);
+        tmp_gx = zeros([m,N]);
+        for i = 1:N
+            tmp_gx = cconvfft2(A(:,:,i), tmp - Y, m, 'left') + lambda * X(:,:,i)./sprt(mu^2+X(:,:,i).^2);
+        end
+        gx = tmp_gx(:);
+        
+        D = 1./sqrt(mu^2 + X(:).^2);
+        Hdiag = lambda*D.*(1-D.*X(:).*X_dual(:));
+        Hfun = @(v) Hxx_function_mk(v,RA_hat,Hdiag,m,N);
+        PCGPRECOND = @(v) v./(Hdiag + 1);
+        
+        % Deal with the xDelta using PCG
+        [xDelta, ~] = pcg(Hfun, -gx, PCGTOL, PCGIT, PCGPRECOND);
+        xDelta = reshape(xDelta,[m,N]);
+        
+        % Update the dual
+        x_dualDelta = D.*( 1 - D.*X(:).*X_dual(:) ).*xDelta(:) - ( X_dual(:) - D.*X(:) );
+        X_dual = X_dual + reshape(x_dualDelta,[m,N]);
+        X_dual = min(abs(X_dual),1).*sign(X_dual);
+        
+        % Update primal by back tracking
+        alpha = 1/C3; f_new = Inf; alphatoolow = false;
+        while f_new > f - C2*alpha*norm(Hfun(X(:)))^2 && ~alphatoolow
+            alpha = C3*alpha;
+            X_new = X + alpha*xDelta;
+            f_new = objfun(X_new);
+            alphatoolow = alpha < ALPHATOL;
+        end
+        % Cheke the conditions for interate
+        if ~alphatoolow
+            X = X_new;
+            f = f_new;
+        end
+        doagain = norm(Hfun(xDelta(:))) > EPSILON && ~alphatoolow && (it < MAXIT);
+    sol.X = X;
+    sol.X_dual = X_dual;
+    sol.f = f;
+    sol.numit = it;
+    sol.alphatoolow = alphatoolow;
+    end
 end
 
 function [out] = obj_function(X, A, Y, lambda, mu)
