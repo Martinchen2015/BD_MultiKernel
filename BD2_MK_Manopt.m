@@ -58,4 +58,21 @@ function [Aout, Xout, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     if nvarargin >= idx && ~isempty(varargin{idx})
         options.maxiter = varargin{idx};
     end
+    
+    %% set the problem for manopt
+    suppack.Y = Y;
+    suppack.k = k;
+    suppack.N = N;
+    suppack.lambda = lambda;
+    suppack.mu = mu;
+    suppack.INVTOL = INVTOL;
+    suppack.INVIT = INVIT;
+    
+    sp = spherefactory(prod(k));
+    problem.M = powermanifold(sp, N);
+    problem.cost = @(a,store) costfun(a, store,suppack);
+    problem.egrad = @(a,store) egradfun(a, store, suppack);
+    problem.ehess = @(a,u,store) ehessfun(a, u, store,suppack);
+    
+    options.statsfun = @(problem, a, stats, store) statsfun( problem, a, stats, store, dispfun);
 end
