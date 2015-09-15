@@ -62,6 +62,7 @@ function [Aout, Xout, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     %% set the problem for manopt
     suppack.Y = Y;
     suppack.k = k;
+    suppack.m = m;
     suppack.N = N;
     suppack.lambda = lambda;
     suppack.mu = mu;
@@ -69,10 +70,88 @@ function [Aout, Xout, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     suppack.INVIT = INVIT;
     
     sp = spherefactory(prod(k));
-    problem.M = powermanifold(sp, N);
+    problem.M = powermanifold(sp, N); % here A will be repersented as a cell of length N
     problem.cost = @(a,store) costfun(a, store,suppack);
     problem.egrad = @(a,store) egradfun(a, store, suppack);
     problem.ehess = @(a,u,store) ehessfun(a, u, store,suppack);
     
     options.statsfun = @(problem, a, stats, store) statsfun( problem, a, stats, store, dispfun);
+    
+    %% run the solver
+    
+end
+
+function [store] = computeX(a, store, suppack)
+    k = suppack.k;
+    N = suppack.N;
+    
+    sol = xsolver_mk_pdNCG(suppack.Y,A_Cell2Mtx(a,k,N),suppack.lambda,...
+        suppack.mu,suppack.INVTOL,suppack.INVIT);
+    store.X = sol.X;
+    store.cost = sol.f;
+    
+end
+
+function [stats] = statsfun(problem, a, stats, store, dispfun)
+    dispfun(a,store.X);%here a is a cell
+    pause(0.1);
+end
+
+function [cost, store] = costfun(a, store, suppack)
+    if ~(isfield(store,'X'))
+        store = computeX(a, store, suppack);
+    end
+    cost = store.cost;
+end
+
+function [egrad, store] = egradfun(a, store, suppack)
+    if ~(isfield(store,'X'))
+        store = computeX(a, store, suppack);
+    end
+    
+    k = suppack.k;
+    N = suppack.N;
+    egrad = cell(N);
+    
+    tmp = zeros(suppack.m);
+    A_mtx = A_Cell2Mtx(a);
+    
+    for i = 1:N
+        tmp = tmp + cconvfft2(store.X(:,:,i), A_mtx(:,:,i));
+    end
+    tmp = tmp - suppack.Y;
+    for i = 1:N
+        tmp_grad = cconvfft2(store.X(:,:,i),tmp,m,'left');
+        tmp_grad = tmp_grad(1:k(1),1:(2));
+        egrad{i} = tmp_grad(:);
+    end
+    
+end
+
+function [ehess, store] = ehessfun(a, u, store, suppack)
+    if ~(isfield(store,'X'))
+        store = computeX(a, store, suppack);
+    end
+    k = suppack.k;
+    N = suppack.N;
+    a_Mtx = A_Cell2Mtx(a,k,N);
+    u_Mtx = A_Cell2Mtx(u,k,N);
+    ehess_Mtx = Haa_function_mk(u_Mtx, suppack.Y, a_Mtx, store.X, ...
+        suppack.lambda, suppack.mu, suppack.INVTOL, suppack.INVIT);
+    ehess = A_Mtx2Cell(ehess_Mtx,N);
+end
+
+function [Mtx_A] = A_Cell2Mtx(a,k,N)
+    Mtx_A = zeros([k,N]);
+    for i = 1:N
+        Mtx_A(:,:,i) = reshape(a{i},k);
+    end
+end
+
+function [Cell_A] = A_Mtx2Cell(a,N)
+    Cell_A = cell(N);
+    for i = 1:N
+        tmp = a(:,:,i);
+        Cell_A{i} = tmp(:);
+    end
 end
