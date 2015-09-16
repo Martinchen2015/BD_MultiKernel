@@ -24,7 +24,7 @@ function [sol] = xsolver_mk_pdNCG(Y, A, lambda, mu, varargin)
     end
     
     RA_hat = cell(N,N);%RA_hat{i,j} = conj(Ai) .* Aj
-    for i = 1:N
+    parfor i = 1:N
         for j = 1:N
             tmp1 = fft2(A(:,:,i),m(1),m(2));
             tmp2 = fft2(A(:,:,j),m(1),m(2));

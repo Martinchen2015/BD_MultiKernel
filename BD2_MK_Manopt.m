@@ -1,4 +1,4 @@
-function [Aout, Xout, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
+function [Aout, Xsol, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     addpath ./helpers
     m = size(Y);
     k = size(Ain);
@@ -78,6 +78,9 @@ function [Aout, Xout, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     options.statsfun = @(problem, a, stats, store) statsfun( problem, a, stats, store, dispfun);
     
     %% run the solver
+    [Aout, stats.cost, ~, stats.options] = ManoptSolver(problem, A_Mtx2Cell(Ain,N), options);
+    Aout = a_Cell2Mtx(Aout,k,N);
+    Xsol = xsolver_mk_pdNCG(Y, Aout, lambda, mu, suppack.xinit, INVTOL, INVIT);
     
 end
 
@@ -114,7 +117,7 @@ function [egrad, store] = egradfun(a, store, suppack)
     egrad = cell(N);
     
     tmp = zeros(suppack.m);
-    A_mtx = A_Cell2Mtx(a);
+    A_mtx = A_Cell2Mtx(a, k, N);
     
     for i = 1:N
         tmp = tmp + cconvfft2(store.X(:,:,i), A_mtx(:,:,i));
