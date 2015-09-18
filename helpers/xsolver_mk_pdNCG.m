@@ -46,7 +46,7 @@ function [sol] = xsolver_mk_pdNCG(Y, A, lambda, mu, varargin)
         if isfield(varargin{idx}, 'X') && ~isempty(varargin{idx}.X)
             X = varargin{idx}.X;
         end
-        if isfield(varargin{idx}, 'X_dual') && ~isempty(varargin{idx}.W)
+        if isfield(varargin{idx}, 'X_dual') && ~isempty(varargin{idx}.X_dual)
             X_dual = varargin{idx}.X_dual;
         end
     end

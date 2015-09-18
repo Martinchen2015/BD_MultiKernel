@@ -30,7 +30,7 @@ function [Aout, Xsol, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     
     idx = 1;
     if nvarargin < idx || isempty(varargin{idx})
-        suppack.xinit = xsolver2_mk_pdNCG(Y, Ain, lambda, mu, [], INVTOL, INVIT);
+        suppack.xinit = xsolver_mk_pdNCG(Y, Ain, lambda, mu, [], INVTOL, INVIT);
         
     else
         suppack.xinit = varargin{idx};
@@ -75,11 +75,11 @@ function [Aout, Xsol, stats] = BD2_MK_Manopt(Y, Ain, lambda, mu, varargin)
     problem.egrad = @(a,store) egradfun(a, store, suppack);
     problem.ehess = @(a,u,store) ehessfun(a, u, store,suppack);
     
-    options.statsfun = @(problem, a, stats, store) statsfun( problem, a, stats, store, dispfun);
+    options.statsfun = @(problem, a, stats, store) statsfun( problem, a, stats, store, dispfun, suppack);
     
     %% run the solver
     [Aout, stats.cost, ~, stats.options] = ManoptSolver(problem, A_Mtx2Cell(Ain,N), options);
-    Aout = a_Cell2Mtx(Aout,k,N);
+    Aout = A_Cell2Mtx(Aout,k,N);
     Xsol = xsolver_mk_pdNCG(Y, Aout, lambda, mu, suppack.xinit, INVTOL, INVIT);
     
 end
@@ -89,14 +89,16 @@ function [store] = computeX(a, store, suppack)
     N = suppack.N;
     
     sol = xsolver_mk_pdNCG(suppack.Y,A_Cell2Mtx(a,k,N),suppack.lambda,...
-        suppack.mu,suppack.INVTOL,suppack.INVIT);
+        suppack.mu,suppack.xinit,suppack.INVTOL,suppack.INVIT);
     store.X = sol.X;
     store.cost = sol.f;
     
 end
 
-function [stats] = statsfun(problem, a, stats, store, dispfun)
-    dispfun(a,store.X);%here a is a cell
+function [stats] = statsfun(problem, a, stats, store, dispfun, suppack)
+    k = suppack.k;
+    N = suppack.N;
+    dispfun(A_Cell2Mtx(a,k,N),store.X(:,:,1));%here 'a' is a cell
     pause(0.1);
 end
 
@@ -113,6 +115,7 @@ function [egrad, store] = egradfun(a, store, suppack)
     end
     
     k = suppack.k;
+    m = suppack.m;
     N = suppack.N;
     egrad = cell(N);
     
@@ -125,7 +128,7 @@ function [egrad, store] = egradfun(a, store, suppack)
     tmp = tmp - suppack.Y;
     for i = 1:N
         tmp_grad = cconvfft2(store.X(:,:,i),tmp,m,'left');
-        tmp_grad = tmp_grad(1:k(1),1:(2));
+        tmp_grad = tmp_grad(1:k(1),1:k(2));
         egrad{i} = tmp_grad(:);
     end
     
